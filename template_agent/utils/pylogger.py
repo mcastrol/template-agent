@@ -1,6 +1,8 @@
 """Structured logger utility for the Template MCP server."""
 
+import importlib
 import logging
+import pkgutil
 import sys
 from typing import Any, Dict, List, Set
 
@@ -74,9 +76,58 @@ THIRD_PARTY_LOGGERS: Set[str] = (
 ERROR_ONLY_LOGGERS: Set[str] = ML_AI_LOGGERS | OBSERVABILITY_LOGGERS
 
 _LOGGING_CONFIGURED = False
+_DISCOVERED_LOGGERS_CACHE = None
 
 
 # --- Internal helpers ---
+
+
+def _discover_app_loggers(package_name: str = "template_agent") -> List[str]:
+    """Dynamically discover all logger names for the application package.
+
+    This function walks through the package structure and generates logger names
+    that would be created by modules in the package hierarchy. Results are cached
+    to avoid repeated discovery.
+
+    Args:
+        package_name: The root package name to discover loggers for
+
+    Returns:
+        List of logger names that should be configured
+    """
+    global _DISCOVERED_LOGGERS_CACHE
+
+    # Return cached result if available
+    if _DISCOVERED_LOGGERS_CACHE is not None:
+        return _DISCOVERED_LOGGERS_CACHE
+
+    logger_names = [package_name]  # Always include the root package
+
+    try:
+        # Import the package to get its path
+        package = importlib.import_module(package_name)
+        if not hasattr(package, '__path__'):
+            _DISCOVERED_LOGGERS_CACHE = logger_names
+            return logger_names
+
+        # Walk through all submodules and subpackages
+        for importer, modname, ispkg in pkgutil.walk_packages(
+            package.__path__,
+            prefix=f"{package_name}."
+        ):
+            logger_names.append(modname)
+
+    except (ImportError, AttributeError):
+        # If we can't import the package, fall back to common patterns
+        logger_names.extend([
+            f"{package_name}.src",
+            f"{package_name}.src.core",
+            f"{package_name}.utils"
+        ])
+
+    # Cache the result
+    _DISCOVERED_LOGGERS_CACHE = logger_names
+    return logger_names
 
 
 def _clear_handlers(logger: logging.Logger) -> None:
@@ -173,6 +224,8 @@ def get_uvicorn_log_config(log_level: str = "INFO") -> Dict[str, Any]:
     # Base uvicorn loggers
     base_loggers = ["", "uvicorn", "uvicorn.error", "uvicorn.asgi", "uvicorn.protocols"]
     access_loggers = ["uvicorn.access"]
+    # Dynamically discover application loggers
+    app_loggers = _discover_app_loggers("template_agent")
 
     return {
         "version": 1,
@@ -196,6 +249,7 @@ def get_uvicorn_log_config(log_level: str = "INFO") -> Dict[str, Any]:
         "loggers": {
             **make_logger_config(base_loggers, log_level),
             **make_logger_config(access_loggers, log_level),
+            **make_logger_config(app_loggers, log_level),
             **make_logger_config(
                 list(THIRD_PARTY_LOGGERS - ERROR_ONLY_LOGGERS), log_level
             ),
