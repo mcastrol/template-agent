@@ -106,24 +106,35 @@ def _discover_app_loggers(package_name: str = "template_agent") -> List[str]:
     try:
         # Import the package to get its path
         package = importlib.import_module(package_name)
-        if not hasattr(package, '__path__'):
-            _DISCOVERED_LOGGERS_CACHE = logger_names
-            return logger_names
-
-        # Walk through all submodules and subpackages
-        for importer, modname, ispkg in pkgutil.walk_packages(
-            package.__path__,
-            prefix=f"{package_name}."
-        ):
-            logger_names.append(modname)
-
-    except (ImportError, AttributeError):
+    except ImportError:
         # If we can't import the package, fall back to common patterns
-        logger_names.extend([
+        # Only add paths that actually exist
+        fallback_patterns = [
             f"{package_name}.src",
             f"{package_name}.src.core",
             f"{package_name}.utils"
-        ])
+        ]
+        for pattern in fallback_patterns:
+            try:
+                importlib.import_module(pattern)
+                logger_names.append(pattern)
+            except ImportError:
+                pass  # Skip non-existent modules
+
+        _DISCOVERED_LOGGERS_CACHE = logger_names
+        return logger_names
+
+    # If package doesn't have __path__, it's not a package
+    if not hasattr(package, '__path__'):
+        _DISCOVERED_LOGGERS_CACHE = logger_names
+        return logger_names
+
+    # Walk through all submodules and subpackages
+    for _, modname, _ in pkgutil.walk_packages(
+        package.__path__,
+        prefix=f"{package_name}."
+    ):
+        logger_names.append(modname)
 
     # Cache the result
     _DISCOVERED_LOGGERS_CACHE = logger_names
