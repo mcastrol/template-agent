@@ -4,7 +4,7 @@ import importlib
 import logging
 import pkgutil
 import sys
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Optional, Set
 
 import structlog
 
@@ -76,7 +76,7 @@ THIRD_PARTY_LOGGERS: Set[str] = (
 ERROR_ONLY_LOGGERS: Set[str] = ML_AI_LOGGERS | OBSERVABILITY_LOGGERS
 
 _LOGGING_CONFIGURED = False
-_DISCOVERED_LOGGERS_CACHE = None
+_DISCOVERED_LOGGERS_CACHE: Optional[List[str]] = None
 
 
 # --- Internal helpers ---
@@ -112,7 +112,7 @@ def _discover_app_loggers(package_name: str = "template_agent") -> List[str]:
         fallback_patterns = [
             f"{package_name}.src",
             f"{package_name}.src.core",
-            f"{package_name}.utils"
+            f"{package_name}.utils",
         ]
         for pattern in fallback_patterns:
             try:
@@ -125,14 +125,13 @@ def _discover_app_loggers(package_name: str = "template_agent") -> List[str]:
         return logger_names
 
     # If package doesn't have __path__, it's not a package
-    if not hasattr(package, '__path__'):
+    if not hasattr(package, "__path__"):
         _DISCOVERED_LOGGERS_CACHE = logger_names
         return logger_names
 
     # Walk through all submodules and subpackages
     for _, modname, _ in pkgutil.walk_packages(
-        package.__path__,
-        prefix=f"{package_name}."
+        package.__path__, prefix=f"{package_name}."
     ):
         logger_names.append(modname)
 
