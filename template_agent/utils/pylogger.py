@@ -130,10 +130,8 @@ def _discover_app_loggers(package_name: str = "template_agent") -> List[str]:
         return logger_names
 
     # Walk through all submodules and subpackages
-    for _, modname, _ in pkgutil.walk_packages(
-        package.__path__, prefix=f"{package_name}."
-    ):
-        logger_names.append(modname)
+    for pkg in pkgutil.walk_packages(package.__path__, prefix=f"{package_name}."):
+        logger_names.append(pkg.name)
 
     # Cache the result
     _DISCOVERED_LOGGERS_CACHE = logger_names
