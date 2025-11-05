@@ -120,20 +120,13 @@ def _discover_app_loggers(package_name: str = "template_agent") -> List[str]:
                 logger_names.append(pattern)
             except ImportError:
                 pass  # Skip non-existent modules
+    else:
+        # If package has __path__, walk through all submodules and subpackages
+        if hasattr(package, "__path__"):
+            for pkg in pkgutil.walk_packages(package.__path__, prefix=f"{package_name}."):
+                logger_names.append(pkg.name)
 
-        _DISCOVERED_LOGGERS_CACHE = logger_names
-        return logger_names
-
-    # If package doesn't have __path__, it's not a package
-    if not hasattr(package, "__path__"):
-        _DISCOVERED_LOGGERS_CACHE = logger_names
-        return logger_names
-
-    # Walk through all submodules and subpackages
-    for pkg in pkgutil.walk_packages(package.__path__, prefix=f"{package_name}."):
-        logger_names.append(pkg.name)
-
-    # Cache the result
+    # Common exit point: cache the result and return
     _DISCOVERED_LOGGERS_CACHE = logger_names
     return logger_names
 
